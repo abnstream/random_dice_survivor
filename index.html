@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎲</text></svg>">
 <head>
     <meta charset="UTF-8">
     <title>Dice Survivors</title>
@@ -404,6 +405,72 @@
         }
         .back-btn:hover { background: #fff; color: #000; }
 
+        /* 音量スライダーのスタイル */
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 15px;
+            font-family: monospace;
+            color: #ccc;
+        }
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+            width: 200px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            background: #444;
+            border-radius: 4px;
+            border: 1px solid #777;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 10px;
+            border-radius: 2px;
+            background: var(--accent-green);
+            cursor: pointer;
+            margin-top: -7px; /* 
+            
+            トラックの中央に合わせる */
+        }
+
+        /* --- エンディング画面専用スタイル --- */
+        #ending-screen {
+            background: linear-gradient(135deg, rgba(20,0,50,0.95), rgba(0,0,20,0.95)); /* ちょっとリッチな背景色 */
+        }
+        .ending-title {
+            font-size: 60px;
+            background: linear-gradient(to bottom, #f1c40f, #e67e22, #f1c40f);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(241, 196, 15, 0.6);
+            margin-bottom: 10px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        @keyframes glow {
+            from { text-shadow: 0 0 20px rgba(241, 196, 15, 0.4); transform: scale(1); }
+            to { text-shadow: 0 0 40px rgba(241, 196, 15, 0.8); transform: scale(1.05); }
+        }
+
+        /* 紙吹雪のスタイル */
+        #confetti-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 0;
+        }
+        .confetti {
+            position: absolute;
+            width: 10px; height: 10px;
+            background-color: #f00;
+            opacity: 0.8;
+        }
+
     </style>
 </head>
 <body>
@@ -452,7 +519,23 @@
                 <button id="btn-start" class="menu-btn" onclick="startGame()">GAME START</button>
                 <button id="btn-shop" class="menu-btn" onclick="openShop()">SHOP</button>
             </div>
+            
             <div class="credit-display">CREDITS: <span id="title-credits">0</span></div>
+
+            <div class="volume-control">
+                <span>SE VOLUME</span>
+                <input type="range" id="title-volume" min="0" max="100" value="50">
+                <span id="title-vol-text">50%</span>
+            </div>
+            <div class="volume-control">
+                <span>BGM VOLUME</span>
+                <input type="range" id="title-bgm-volume" min="0" max="100" value="40">
+                <span id="title-bgm-text">40%</span>
+            </div>
+
+            <div style="margin-top: 30px; font-size: 14px; color: #888; letter-spacing: 1px;">
+                音楽：魔王魂
+            </div>
         </div>
 
         <div id="shop-screen" class="overlay">
@@ -474,6 +557,16 @@
         <div id="pause-screen" class="overlay">
             <h1>PAUSED</h1>
             <p>Press Esc to Resume</p>
+            <div class="volume-control" style="margin-bottom: 20px;">
+                <span>SE VOLUME</span>
+                <input type="range" id="pause-volume" min="0" max="100" value="50">
+                <span id="pause-vol-text">50%</span>
+            </div>
+            <div class="volume-control" style="margin-bottom: 20px;">
+                <span>BGM VOLUME</span>
+                <input type="range" id="pause-bgm-volume" min="0" max="100" value="40">
+                <span id="pause-bgm-text">40%</span>
+            </div>
             <button class="restart-btn" onclick="backToTitle()">TITLE</button>
         </div>
 
@@ -491,6 +584,29 @@
                 </div>
             </div>
             <button class="restart-btn" onclick="backToTitle()">TITLE</button>
+        </div>
+
+        <div id="ending-screen" class="overlay" style="display:none;">
+            <div id="confetti-container"></div>
+
+            <h1 class="ending-title">CONGRATULATIONS!</h1>
+            <div style="font-size: 20px; color: #f1c40f; margin-bottom: 30px; text-shadow: 0 0 10px rgba(241, 196, 15, 0.5);">
+                YOU SURVIVED THE HELL
+            </div>
+
+            <div style="margin-bottom: 30px; text-align: center; z-index: 10;">
+                <div style="font-size: 30px; color: #fff; font-weight: bold;">
+                    FINAL SCORE: <span id="ed-score">0</span>
+                </div>
+                <div style="font-size: 18px; color: #aaa;">
+                    HIGH SCORE: <span id="ed-high-score">0</span>
+                </div>
+                <div style="font-size: 18px; color: #f1c40f; margin-top: 10px;">
+                    +<span id="ed-credits">0</span> CREDITS
+                </div>
+            </div>
+            
+            <button class="restart-btn" style="z-index: 10; background: rgba(0,0,0,0.5);" onclick="backToTitle()">RETURN TO TITLE</button>
         </div>
 
         <div id="level-up-screen" class="overlay" style="display:none;">
@@ -645,6 +761,9 @@
     let diceDrops = []; // ★追加: ダイスドロップアイテム管理用
     let areaEffects = [];
 
+    // ★追加: Wave50ボス撃破フラグ
+    let hasDefeatedWave50Boss = false;
+
     // 変数定義エリアに追加
     let enemyProjectiles = []; // 敵の弾丸管理用
 
@@ -713,6 +832,129 @@
         updateXpUI();
     }
 
+
+    // --- サウンド管理システム ---
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = new AudioContext();
+    
+    const soundBuffers = {};
+    let masterVolume = 0.5; // SE音量
+    let bgmVolume = 0.4;    // ★追加: BGM音量
+    let currentBgmSource = null; // ★追加: 現在再生中のBGMソース
+    let currentBgmGainNode = null; // ★追加: 音量変更用に保持
+
+    // 読み込みたいファイルリスト
+    const SOUND_FILES = {
+        missile: 'sounds/shoot_missile.mp3',
+        machinegun: 'sounds/shoot_mg.mp3',
+        shockwave: 'sounds/shoot_shock.mp3',
+        drone: 'sounds/shoot_drone.mp3',
+        gem: 'sounds/gem.mp3',
+        levelup: 'sounds/levelup.mp3',
+        gameover: 'sounds/gameover.mp3',
+        click: 'sounds/click.mp3',
+        gravity: 'sounds/gravity.mp3',
+        explosion: 'sounds/explosion.mp3',
+        hit: 'sounds/hit.mp3',
+
+        // ★追加: BGMファイル
+        bgm_title: 'sounds/bgm_title.mp3',
+        bgm_game: 'sounds/bgm_game.mp3',
+        bgm_gameover: 'sounds/bgm_gameover.mp3',
+        bgm_ending: 'sounds/bgm_ending.mp3'
+    };
+
+    // (loadSounds 関数は変更なし)
+    async function loadSounds() {
+        for (const [key, url] of Object.entries(SOUND_FILES)) {
+            try {
+                const response = await fetch(url);
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                soundBuffers[key] = audioBuffer;
+            } catch (e) {
+                console.warn(`Sound load failed: ${url}`, e);
+            }
+        }
+    }
+
+    // (playSound 関数は変更なし)
+    function playSound(key, pitchVar = 0) {
+        if (masterVolume <= 0 || !soundBuffers[key]) return;
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        const source = audioCtx.createBufferSource();
+        source.buffer = soundBuffers[key];
+        if (pitchVar > 0) source.playbackRate.value = 1.0 + (Math.random() - 0.5) * pitchVar;
+
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.value = masterVolume;
+
+        source.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        source.start(0);
+    }
+
+    // ★追加: BGM再生関数
+    function playBgm(key) {
+        if (!soundBuffers[key]) return;
+        
+        stopBgm();
+
+        // ここにあった "if (audioCtx.state === 'suspended') audioCtx.resume();" を削除
+
+        const source = audioCtx.createBufferSource();
+        source.buffer = soundBuffers[key];
+        source.loop = true;
+
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.value = bgmVolume;
+
+        source.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        source.start(0);
+
+        currentBgmSource = source;
+        currentBgmGainNode = gainNode;
+    }
+
+    // ★追加: BGM停止関数
+    function stopBgm() {
+        if (currentBgmSource) {
+            try {
+                currentBgmSource.stop();
+            } catch(e) {}
+            currentBgmSource = null;
+            currentBgmGainNode = null;
+        }
+    }
+
+    // (setGlobalVolume は SE用として残す)
+    function setGlobalVolume(val) {
+        masterVolume = val / 100;
+        document.getElementById('title-volume').value = val;
+        document.getElementById('pause-volume').value = val;
+        document.getElementById('title-vol-text').innerText = val + '%';
+        document.getElementById('pause-vol-text').innerText = val + '%';
+        localStorage.setItem('diceSurvivors_volume', val);
+    }
+
+    // ★追加: BGM音量変更関数
+    function setBgmVolume(val) {
+        bgmVolume = val / 100;
+        // UI更新
+        document.getElementById('title-bgm-volume').value = val;
+        document.getElementById('pause-bgm-volume').value = val;
+        document.getElementById('title-bgm-text').innerText = val + '%';
+        document.getElementById('pause-bgm-text').innerText = val + '%';
+        
+        // 再生中のBGMがあれば即座に音量反映
+        if(currentBgmGainNode) {
+            currentBgmGainNode.gain.value = bgmVolume;
+        }
+        localStorage.setItem('diceSurvivors_bgm_volume', val);
+    }
+
     
 
     function setDiceFace(element, faceNum) {
@@ -756,6 +998,7 @@
     // --- レベルアップシステム ---
 
     function triggerLevelUp() {
+        playSound('levelup');
         isLevelUp = true;
         screenLevelUp.style.display = 'flex';
         
@@ -918,16 +1161,23 @@
         }
 
         update(dt) {
-            // ★変更: 減速倍率(speedFactor)の計算
+            // ★変更: 減速倍率(speedFactor)の計算式を修正
             let speedFactor = 1.0;
             
             if(this.slowTimer > 0) {
                 // グラビティ強化Lvを取得
                 const gravLv = upgradeLevels.grav_up || 0;
-                // Lv0で0.6 (60%速度=40%減速)
-                // Lv5で0.1 (10%速度=90%減速)
-                // 1レベルごとに -0.1
-                speedFactor = Math.max(0.1, 0.6 - (gravLv * 0.1));
+                
+                // 変更前: 0.6 - (gravLv * 0.1)  (Lv0=60%, Lv5=10%)
+                
+                // ★変更後: 
+                // Lv0で 0.8 (80%速度 = 20%減速)
+                // 1レベルごとに -0.05
+                // Lv5で 0.55 (55%速度 = 45%減速)
+                speedFactor = 0.8 - (gravLv * 0.05);
+
+                // 念のため下限キャップ（完全に止まらないように0.1以上にするなど）
+                speedFactor = Math.max(0.1, speedFactor);
                 
                 this.slowTimer -= dt;
             }
@@ -1591,15 +1841,21 @@
             }
 
             let ex = GAME_WIDTH / 2;
-            // 複数出るときは少し位置をずらす
             let ey = -margin * 2 - (k * 100); 
             
-            // 横にも少し散らす
             if (bossSpawnCount > 1) {
                 ex += (Math.random() - 0.5) * 200;
             }
 
-            enemies.push(new Enemy(ex, ey, bossType, true));
+            // 敵を生成してリストに追加
+            const newBoss = new Enemy(ex, ey, bossType, true);
+            
+            // ★追加: Wave50のボスなら「ラスボス」フラグを立てる
+            if (wave === 50) {
+                newBoss.isFinalBoss = true;
+            }
+            
+            enemies.push(newBoss);
         }
 
         // --- 雑魚敵生成 ---
@@ -1750,7 +2006,13 @@
             const target = getClosestEnemy(player.x, player.y);
             if(target || enemies.length > 0) {
                 for(let i=0; i<count; i++) {
-                    setTimeout(() => projectiles.push(new Projectile(player.x, player.y, 'missile', level, target)), i*60);
+                    setTimeout(() => {
+                        // ★追加: 停止中なら撃たない
+                        if (isLevelUp || isPaused || isGameOver) return;
+
+                        playSound('missile', 0.2); 
+                        projectiles.push(new Projectile(player.x, player.y, 'missile', level, target));
+                    }, i*60);
                 }
             }
         } else if(type === 'machinegun') {
@@ -1758,38 +2020,49 @@
             if(enemies.length > 0) {
                 for(let i=0; i<count; i++) {
                     setTimeout(() => {
+                        // ★追加: 停止中なら撃たない
+                        if (isLevelUp || isPaused || isGameOver) return;
+
                         const currentTarget = getClosestEnemy(player.x, player.y);
+                        playSound('machinegun', 0.1); 
                         projectiles.push(new Projectile(player.x, player.y, 'machinegun', level, currentTarget));
                     }, i*30);
                 }
             }
             
         } else if(type === 'shockwave') {
-            // ★変更: レベル依存をやめ、ベース1回 + アップグレード回数に変更
             const bonusCount = upgradeLevels.shock_up || 0;
             const count = 1 + bonusCount;
             
             const interval = 350; 
             for(let i=0; i<count; i++) {
                 setTimeout(() => {
+                    // ★追加: 停止中なら撃たない
+                    if (isLevelUp || isPaused || isGameOver) return;
+
                     if(!isGameOver) {
+                        playSound('shockwave');
                         areaEffects.push(new AreaEffect(player.x, player.y, 'shockwave', level));
                     }
                 }, i * interval);
             }
 
         } else if(type === 'drone') {
-            // ★変更: アップグレードによる数増加(bonus)を削除
-            // const bonus = (upgradeLevels.drone_up || 0) * 3; // ←削除
-            
-            // 純粋に武器レベルのみで数を決定 (Lv1で2個, Lv2で3個...)
             const count = 1 + level; 
-            
             for(let i=0; i<count; i++) {
-                setTimeout(() => projectiles.push(new Projectile(player.x, player.y, 'drone', level, null)), i*100);
+                setTimeout(() => {
+                    // ★追加: 停止中なら出さない
+                    if (isLevelUp || isPaused || isGameOver) return;
+
+                    playSound('drone');
+                    projectiles.push(new Projectile(player.x, player.y, 'drone', level, null));
+                }, i*100);
             }
 
-        }else if(type === 'gravity') {
+        } else if(type === 'gravity') {
+            // ★変更: グラビティ専用の音を鳴らす
+            playSound('gravity'); 
+            
             const rx = Math.random() * (GAME_WIDTH - 100) + 50;
             const ry = Math.random() * (GAME_HEIGHT - 100) + 50;
             areaEffects.push(new AreaEffect(rx, ry, 'gravity', level));
@@ -1810,22 +2083,15 @@
                 clearInterval(spinInterval);
                 div.classList.remove('rolling');
                 
-                // 1~6の出目を決定
                 const resultFace = Math.floor(Math.random() * 6) + 1;
                 setDiceFace(div, resultFace);
 
-                // 出目に対応するスロットの効果を発動 (index 0~5 = Face 1~6)
-                // 結果が「3」なら、diceSlots[2] (Face 3の設定) を使う
-                // ※ 仕様の再確認:
-                // 「画面左上には最大で５つのダイスを置きます」
-                // 「左側にある表に従って、出目の効果が一斉に発動します」
-                // つまり、5個のダイスがそれぞれ 1~6 の値を出し、その値に対応する「表（スロット）」のスキルが発動する。
-                // 例: ダイス1が[3]を出した -> Face 3 のスキル発動
-                
+                // ★追加: レベルアップ中、ポーズ中、ゲームオーバーならここで中断し、武器を発動しない
+                if (isLevelUp || isPaused || isGameOver) return;
+
                 const slotIndex = resultFace - 1;
                 const slotData = diceSlots[slotIndex];
                 
-                // 発動
                 fireWeapon(slotData.type, slotData.level);
 
             }, stopDelay);
@@ -1877,7 +2143,11 @@
                 const dx = e1.x - e2.x;
                 const dy = e1.y - e2.y;
                 const dist = Math.hypot(dx, dy);
-                const minDist = (e1.size + e2.size) * 0.9; 
+                
+                // ★修正: 当たり判定を (サイズ/2 + サイズ/2) に合わせる
+                // 今までは (e1.size + e2.size) だったので2倍の距離で反発していました
+                const minDist = (e1.size/2 + e2.size/2) * 0.9; 
+                
                 if (dist < minDist && dist > 0) {
                     const overlap = minDist - dist;
                     const pushX = (dx / dist) * (overlap / 2);
@@ -1927,17 +2197,19 @@
                     const e = enemies[j];
                     const dist = Math.hypot(m.x - e.x, m.y - e.y);
                     
-                    if(dist < e.size + m.size) {
+                    // ★修正: 敵の半径を e.size/2 として計算
+                    if(dist < (e.size/2) + m.size) {
                         
-                        // --- ミサイル (爆風) ---
+                        // --- ミサイル (着弾 = 爆発) ---
                         if(m.type === 'missile') {
                             createMissileExplosion(m.x, m.y);
                             
-                            // ★変更: 爆発範囲アップグレード適用
+                            // ★追加: 爆発音 (少し大きめ)
+                            playSound('explosion', 0.6); 
+
+                            // (以下ダメージ計算処理...変更なし)
                             const missileLv = upgradeLevels.missile_ex || 0;
-                            // 基本80 * (1 + Lv*0.15)
                             const blastRadius = 80 * (1 + missileLv * 0.15);
-                            
                             enemies.forEach(subE => {
                                 const blastDist = Math.hypot(m.x - subE.x, m.y - subE.y);
                                 if(blastDist < blastRadius) {
@@ -1949,11 +2221,14 @@
                             break; 
                         }
                         
-                        // --- ドローン (範囲持続) ---
+                        // --- ドローン (接触) ---
                         else if(m.type === 'drone') {
-                            // (変更なし)
                             const alreadyHit = m.hitCooldowns.find(h => h.enemy === e);
                             if(alreadyHit) continue; 
+                            
+                            // ★追加: ヒット音 (連続するので控えめに、ピッチを揺らす)
+                            playSound('hit', 0.2);
+
                             m.hitCooldowns.push({ enemy: e, timer: 15 });
                             e.hp -= getDamage(4);
                             createExplosion(m.x, m.y);
@@ -1961,9 +2236,12 @@
                             break;
                         }
                         
-                        // --- マシンガン (貫通強化) ---
+                        // --- マシンガン (着弾) ---
                         else if(m.type === 'machinegun') {
                             if(m.hitEnemies.includes(e)) continue;
+
+                            // ★追加: ヒット音 (連射系なので控えめに)
+                            playSound('hit', 0.2);
 
                             e.hp -= getDamage(4); 
                             createExplosion(m.x, m.y);
@@ -1971,8 +2249,6 @@
 
                             m.hitEnemies.push(e);
                             
-                            // ★変更: 貫通数アップグレード適用
-                            // 基本2ヒット + アップグレードLv
                             const pierceBonus = upgradeLevels.mg_pierce || 0;
                             const maxHits = 2 + pierceBonus;
 
@@ -2006,6 +2282,9 @@
         // Dead enemies cleanup
         for(let i=enemies.length-1; i>=0; i--) {
             if(enemies[i].dead) {
+                if (enemies[i].isFinalBoss) {
+                    hasDefeatedWave50Boss = true;
+                }
                 if(enemies[i].isBoss) {
                     diceDrops.push(new DiceDrop(enemies[i].x, enemies[i].y));
                     spawnGems(enemies[i].x, enemies[i].y, 1000); 
@@ -2027,6 +2306,7 @@
             const dist = Math.hypot(player.x - j.x, player.y - j.y);
             if(dist < player.size + j.size + 2) {
                 gainXp(j.xp);
+                playSound('gem', 0.3); // ジェム回収音
                 jewels.splice(i, 1);
             }
         });
@@ -2075,7 +2355,9 @@
         let isTakingDamage = false;
         for(let e of enemies) {
             const dist = Math.hypot(player.x - e.x, player.y - e.y);
-            if(dist < player.size + e.size) {
+            
+            // ★修正: 敵の半径を e.size/2 として計算
+            if(dist < player.size + (e.size/2)) {
                 isTakingDamage = true;
                 const damage = e.dps * (dt / 1000);
                 player.hp -= damage;
@@ -2150,24 +2432,27 @@
     // --- シーン管理 ---
 
     function showTitle() {
-        // ゲーム停止
         isGameRunning = false;
         isPaused = false;
         isGameOver = false;
         
-        // 画面切り替え
         document.getElementById('title-screen').style.display = 'flex';
         screenGameOver.style.display = 'none';
         screenPause.style.display = 'none';
         screenLevelUp.style.display = 'none';
 
-        // クレジット表示更新
         const cr = parseInt(localStorage.getItem('diceSurvivors_credits')) || 0;
+        document.getElementById('ending-screen').style.display = 'none';
         document.getElementById('title-credits').innerText = cr;
 
-        // 背景用に一度だけ描画（真っ黒にならないように）
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+        // ★変更: オーディオが起動中('running')のときだけ再生する
+        // (まだ停止中なら、この後の unlockAudio でクリック時に再生される)
+        if (audioCtx.state === 'running') {
+            playBgm('bgm_title');
+        }
     }
 
     function openShop() {
@@ -2276,6 +2561,8 @@
         diceTimer = 0;
         waveTimer = 0;
         lastTime = performance.now();
+
+        hasDefeatedWave50Boss = false;
         
         // ★変更: HPアップグレード反映 (Base 100 + Lv * 20)
         const bonusHp = (upgradeLevels.hp || 0) * 20;
@@ -2330,7 +2617,9 @@
     }
 
     function startGame() {
+        playSound('click');
         document.getElementById('title-screen').style.display = 'none';
+        playBgm('bgm_game');
         resetGame();
         isGameRunning = true;
         isGameOver = false;
@@ -2341,34 +2630,156 @@
     }
 
     // ★追加: ゲームオーバー共通処理
+    // ゲームオーバーまたはクリア時の処理
     function triggerGameOver() {
-        if(isGameOver) return; // 二重発動防止
+        if(isGameOver) return; 
         
         player.hp = 0;
         isGameOver = true;
 
-        // スコア保存処理
+        // --- 共通: スコアとクレジットの計算・保存 ---
         if(score > highScore) {
             highScore = score;
             localStorage.setItem('diceSurvivors_highScore', highScore);
         }
-        
-        // クレジット加算と保存
         totalCredits += score;
         localStorage.setItem('diceSurvivors_credits', totalCredits);
 
-        // UIへの反映
-        document.getElementById('go-score').innerText = score;
-        document.getElementById('go-high-score').innerText = highScore;
-        document.getElementById('go-credits').innerText = score;
 
-        screenGameOver.style.display = 'flex';
+        // --- 分岐判定 ---
+        // Wave50のボスを倒した = Wave51以上に到達している
+        if (hasDefeatedWave50Boss) {
+            // ★エンディングルート
+            playBgm('bgm_ending');
+            
+            // 値のセット
+            document.getElementById('ed-score').innerText = score;
+            document.getElementById('ed-high-score').innerText = highScore;
+            document.getElementById('ed-credits').innerText = score;
+            
+            // 画面表示
+            document.getElementById('ending-screen').style.display = 'flex';
+            
+            // 紙吹雪開始
+            startConfetti();
+
+        } else {
+            // ★通常ゲームオーバールート
+            playSound('gameover');
+            playBgm('bgm_gameover');
+
+            // 値のセット
+            document.getElementById('go-score').innerText = score;
+            document.getElementById('go-high-score').innerText = highScore;
+            document.getElementById('go-credits').innerText = score;
+            
+            // 画面表示
+            screenGameOver.style.display = 'flex';
+        }
+    }
+
+    // --- 紙吹雪生成関数 ---
+    function startConfetti() {
+        const container = document.getElementById('confetti-container');
+        container.innerHTML = ''; // リセット
+        
+        const colors = ['#e74c3c', '#3498db', '#f1c40f', '#2ecc71', '#9b59b6', '#ecf0f1'];
+        
+        // 100枚の紙吹雪を生成
+        for (let i = 0; i < 100; i++) {
+            const el = document.createElement('div');
+            el.className = 'confetti';
+            
+            // ランダムな色、位置、サイズ
+            el.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            el.style.left = Math.random() * 100 + '%';
+            el.style.top = -10 + 'px'; // 画面上からスタート
+            el.style.width = (Math.random() * 10 + 5) + 'px';
+            el.style.height = (Math.random() * 5 + 5) + 'px';
+            
+            // アニメーション設定 (DOM操作で簡易アニメーション)
+            const duration = Math.random() * 3 + 2; // 2~5秒
+            const delay = Math.random() * 5;
+            
+            el.style.transition = `top ${duration}s linear, transform ${duration}s ease-in-out`;
+            el.style.transform = `rotate(${Math.random() * 360}deg)`;
+            
+            container.appendChild(el);
+
+            // 落下アニメーションループ
+            // (CSS Keyframesだとランダム性が弱いため、JSで少し補完)
+            setTimeout(() => {
+                el.animate([
+                    { transform: `translate3d(0,0,0) rotate(0deg)`, opacity: 1 },
+                    { transform: `translate3d(${Math.random()*100 - 50}px, 600px, 0) rotate(${Math.random()*720}deg)`, opacity: 0 }
+                ], {
+                    duration: duration * 1000,
+                    delay: delay * 1000,
+                    iterations: Infinity
+                });
+            }, 10);
+        }
     }
 
     function backToTitle() {
         // ゲームオーバー画面などからタイトルへ
+        playBgm('bgm_title');
         showTitle();
     }
+
+    // --- 音量スライダーのイベント ---
+    document.getElementById('title-volume').addEventListener('input', (e) => {
+        setGlobalVolume(e.target.value);
+    });
+    document.getElementById('pause-volume').addEventListener('input', (e) => {
+        setGlobalVolume(e.target.value);
+    });
+
+    // 初期化時に保存された音量を適用＆サウンドロード
+    const savedVol = localStorage.getItem('diceSurvivors_volume');
+    if(savedVol !== null) {
+        setGlobalVolume(savedVol);
+    }
+    loadSounds(); // ゲーム開始前にロード開始
+
+    document.getElementById('title-bgm-volume').addEventListener('input', (e) => {
+        setBgmVolume(e.target.value);
+    });
+    document.getElementById('pause-bgm-volume').addEventListener('input', (e) => {
+        setBgmVolume(e.target.value);
+    });
+
+    // 初期化時に保存されたBGM音量を適用
+    const savedBgmVol = localStorage.getItem('diceSurvivors_bgm_volume');
+    if(savedBgmVol !== null) {
+        setBgmVolume(savedBgmVol);
+    }
+
+    function unlockAudio() {
+        // AudioContextが停止中なら再開する
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume().then(() => {
+                // ★成功時の処理: 再開に成功したらタイトルBGMを流す
+                const titleScreen = document.getElementById('title-screen');
+                if (titleScreen.style.display !== 'none') {
+                    playBgm('bgm_title');
+                }
+                console.log("AudioContext resumed successfully!");
+            }).catch(e => {
+                console.error("Audio resume failed:", e);
+            });
+        }
+
+        // イベントリスナーの削除
+        document.removeEventListener('click', unlockAudio);
+        document.removeEventListener('keydown', unlockAudio);
+        document.removeEventListener('touchstart', unlockAudio);
+    }
+
+    // クリック、キー押し、タッチのいずれかで解除
+    document.addEventListener('click', unlockAudio);
+    document.addEventListener('keydown', unlockAudio);
+    document.addEventListener('touchstart', unlockAudio);
 
     
 
