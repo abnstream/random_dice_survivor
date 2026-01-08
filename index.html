@@ -276,23 +276,24 @@
         }
         
         .game-title {
-            font-size: 72px;
+            font-size: 40px;
             color: #e74c3c;
             text-shadow: 0 0 20px #c0392b;
             margin-bottom: 20px;
             font-family: 'Segoe UI', sans-serif;
             font-weight: 900;
             letter-spacing: 5px;
+            padding: 0 20px;
         }
         .menu-buttons {
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 10px;
             margin-bottom: 30px;
         }
         .menu-btn {
             padding: 15px 60px;
-            font-size: 24px;
+            font-size: 22px;
             background: #222;
             color: white;
             border: 2px solid #555;
@@ -470,6 +471,33 @@
             background-color: #f00;
             opacity: 0.8;
         }
+        .high-score-display {
+            font-size: 22px;
+            color: #2ecc71; /* 緑色 (アクセントカラー) */
+            font-family: monospace;
+            font-weight: bold;
+            margin-bottom: 30px; /* ボタンとの間隔 */
+            text-shadow: 0 0 10px rgba(46, 204, 113, 0.4);
+            letter-spacing: 2px;
+        }
+
+        /* ★追加: クリアバッジのスタイル */
+        .clear-badge {
+            display: none; /* 初期状態は非表示 */
+            font-size: 0.6em; /* ハイスコアより少し小さく */
+            color: #f1c40f; /* ゴールド色 */
+            border: 2px solid #f1c40f;
+            border-radius: 4px;
+            padding: 2px 8px;
+            margin-left: 15px;
+            vertical-align: middle;
+            animation: badge-pulse 2s infinite;
+        }
+        @keyframes badge-pulse {
+            0% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); text-shadow: 0 0 10px #f1c40f; }
+            100% { opacity: 0.8; transform: scale(1); }
+        }
 
     </style>
 </head>
@@ -515,8 +543,19 @@
         
         <div id="title-screen" class="overlay">
             <div class="game-title">DICE SURVIVORS</div>
+            
+            <div class="high-score-display">
+                HIGH SCORE: <span id="title-high-score">0</span>
+                <span id="clear-badge" class="clear-badge">★CLEAR</span>
+            </div>
+
+            <div id="hell-score-container" class="high-score-display" style="color: #e74c3c; display:none;">
+                HELL SCORE: <span id="title-hell-high-score">0</span>
+            </div>
+
             <div class="menu-buttons">
-                <button id="btn-start" class="menu-btn" onclick="startGame()">GAME START</button>
+                <button id="btn-start" class="menu-btn" onclick="startGame('normal')">GAME START</button>
+                <button id="btn-hell" class="menu-btn" onclick="startGame('hell')" style="display:none; color:#e74c3c; border-color:#c0392b;">HELL MODE</button>
                 <button id="btn-shop" class="menu-btn" onclick="openShop()">SHOP</button>
             </div>
             
@@ -743,6 +782,10 @@
     let score = 0; // 今回のスコア (総獲得経験値)
     // ローカルストレージから読み込み (なければ0)
     let highScore = parseInt(localStorage.getItem('diceSurvivors_highScore')) || 0;
+
+    let hellHighScore = parseInt(localStorage.getItem('diceSurvivors_hellHighScore')) || 0;
+    let isHellMode = false;
+
     let totalCredits = parseInt(localStorage.getItem('diceSurvivors_credits')) || 0;
 
     const keys = { w:false, a:false, s:false, d:false };
@@ -864,6 +907,26 @@
         bgm_ending: 'sounds/bgm_ending.mp3'
     };
 
+	// --- ヘルパー関数: 色の彩度を落とす計算 ---
+	function getDesaturatedColor(hex, factor) {
+	    // hex形式 (#RRGGBB) を数値に分解
+	    const r = parseInt(hex.slice(1, 3), 16);
+	    const g = parseInt(hex.slice(3, 5), 16);
+	    const b = parseInt(hex.slice(5, 7), 16);
+	    
+	    // 輝度（グレー）を計算
+	    const gray = r * 0.3 + g * 0.59 + b * 0.11;
+	    
+	    // 現在の色とグレーを混ぜる (factor: 0=原色, 1=完全グレー)
+	    const mix = Math.min(1, Math.max(0, factor));
+	    
+	    const newR = Math.floor(r * (1 - mix) + gray * mix);
+	    const newG = Math.floor(g * (1 - mix) + gray * mix);
+	    const newB = Math.floor(b * (1 - mix) + gray * mix);
+
+	    return `rgb(${newR}, ${newG}, ${newB})`;
+	}
+
     // (loadSounds 関数は変更なし)
     async function loadSounds() {
         for (const [key, url] of Object.entries(SOUND_FILES)) {
@@ -878,9 +941,32 @@
         }
     }
 
+    const soundLastPlayed = {};
+    // 音ごとの最低間隔(ms)設定
+    const soundThrottleLimit = {
+        'machinegun': 80, // マシンガンは80msに1回まで
+        'hit': 100,       // ヒット音は0.1秒に1回まで
+        'explosion': 100, // 爆発音も間引く
+        'gem': 50,        // ジェム回収音
+        'drone': 100      // ドローン発射音
+    };
+
     // (playSound 関数は変更なし)
     function playSound(key, pitchVar = 0) {
         if (masterVolume <= 0 || !soundBuffers[key]) return;
+        
+        // ★追加: 間引き処理
+        const now = performance.now();
+        const limit = soundThrottleLimit[key] || 0; // 設定がない音は制限なし(0)
+        
+        if (limit > 0) {
+            const last = soundLastPlayed[key] || 0;
+            if (now - last < limit) {
+                return; // 間隔が短すぎるので鳴らさない
+            }
+            soundLastPlayed[key] = now;
+        }
+
         if (audioCtx.state === 'suspended') audioCtx.resume();
 
         const source = audioCtx.createBufferSource();
@@ -897,11 +983,18 @@
 
     // ★追加: BGM再生関数
     function playBgm(key) {
-        if (!soundBuffers[key]) return;
+        // ファイルが読み込めていない場合は何もしない
+        if (!soundBuffers[key]) {
+            console.warn(`BGM not found or not loaded: ${key}`);
+            return;
+        }
         
         stopBgm();
 
-        // ここにあった "if (audioCtx.state === 'suspended') audioCtx.resume();" を削除
+        // ★重要: BGM再生時にAudioContextが停止していたら再開させる
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(e => console.error(e));
+        }
 
         const source = audioCtx.createBufferSource();
         source.buffer = soundBuffers[key];
@@ -1123,14 +1216,9 @@
                 this.state = 0; 
             }
 
-            // ★変更: Wave55以降のHPインフレ計算
-            // 基本HP計算
+            // Wave55以降のHPインフレ計算
             let baseHp = 10 + (wave * 2);
-            
-            // Wave55を超えていたら、1WaveごとにHP倍率を上げる
             if (wave > 55) {
-                // 例: Wave65なら (65-55)*0.1 = 1.0 -> 基本HPの2倍
-                // 例: Wave75なら (75-55)*0.1 = 2.0 -> 基本HPの3倍
                 const inflationMult = 1 + (wave - 55) * 0.1;
                 baseHp *= inflationMult;
             }
@@ -1138,13 +1226,10 @@
             if (this.isBoss) {
                 this.size = sizeBase * 3;
                 this.hp = (300 + (wave * 60)) * hpMult;
-                
-                // ボスも同様にインフレさせる
                 if (wave > 55) {
                     const inflationMult = 1 + (wave - 55) * 0.1;
                     this.hp *= inflationMult;
                 }
-                
                 this.speed = 0.5 * speedMult;
                 this.color = color;
             } else {
@@ -1158,33 +1243,37 @@
             this.baseSpeed = this.speed;
             this.slowTimer = 0;
             this.dps = this.isBoss ? 50 : (25 + (wave * 2));
+            
+            // ★追加: 色計算キャッシュ用（毎フレーム計算を避けるため）
+            this.cachedColor = this.color;
+            this.isSlowedState = false; 
         }
 
         update(dt) {
-            // ★変更: 減速倍率(speedFactor)の計算式を修正
             let speedFactor = 1.0;
             
+            // 鈍足状態の判定と色キャッシュの更新
             if(this.slowTimer > 0) {
-                // グラビティ強化Lvを取得
                 const gravLv = upgradeLevels.grav_up || 0;
-                
-                // 変更前: 0.6 - (gravLv * 0.1)  (Lv0=60%, Lv5=10%)
-                
-                // ★変更後: 
-                // Lv0で 0.8 (80%速度 = 20%減速)
-                // 1レベルごとに -0.05
-                // Lv5で 0.55 (55%速度 = 45%減速)
                 speedFactor = 0.8 - (gravLv * 0.05);
-
-                // 念のため下限キャップ（完全に止まらないように0.1以上にするなど）
                 speedFactor = Math.max(0.1, speedFactor);
-                
                 this.slowTimer -= dt;
+
+                // 鈍足状態になった瞬間、または継続中に色をグレー寄りに変更
+                if (!this.isSlowedState) {
+                    this.isSlowedState = true;
+                    // 彩度を80%落とす (0.8)
+                    this.cachedColor = getDesaturatedColor(this.color, 0.8);
+                }
+            } else {
+                // 鈍足が解けたら色を元に戻す
+                if (this.isSlowedState) {
+                    this.isSlowedState = false;
+                    this.cachedColor = this.color;
+                }
             }
 
-            // 現在の移動速度に倍率を適用
             let currentSpeed = this.speed * speedFactor;
-
             const dx = player.x - this.x;
             const dy = player.y - this.y;
             const dist = Math.hypot(dx, dy);
@@ -1215,16 +1304,11 @@
                 }
 
             } else {
-                // 移動計算
                 let moveX = 0, moveY = 0;
 
                 if (this.type === 'rusher') {
                     const angle = Math.atan2(dy, dx);
-                    
-                    // ★修正: 蛇行のアニメーション進行もスローにする
                     this.rushAngle += 0.04 * speedFactor; 
-                    
-                    // ★修正: 横振れの強さにもスロー倍率を適用する
                     const curveStrength = 4.5 * speedFactor;
                     
                     moveX = Math.cos(angle) * currentSpeed + Math.cos(this.rushAngle + angle + Math.PI/2) * curveStrength;
@@ -1237,7 +1321,6 @@
                         moveY = (dy / dist) * currentSpeed;
                     }
 
-                    // バースト制御
                     if (!this.isBursting) {
                         const cooldown = this.isBoss ? 200 : 400;
                         if (this.timer > cooldown && dist < 600) {
@@ -1304,22 +1387,15 @@
         }
 
         draw() {
-            // (前回の描画コードと同じ)
             if (this.type === 'teleporter' && this.state === 1) {
                 if (Math.floor(this.timer / 5) % 2 === 0) return;
             }
 
-            // ★変更: 状態を保存（フィルタの影響をこの敵の描画だけに限定するため）
-            ctx.save(); 
+            // ★変更: save/restore と filter を削除し、計算済みの cachedColor を使用
+            // ctx.save(); 
+            // ctx.filter = 'saturate(20%)'; 
 
-            // ★変更: 色を直接灰色にするのではなく、フィルタで彩度を落とす
-            if (this.slowTimer > 0) {
-                // 彩度を20%まで落とす（元の色のニュアンスを残しつつ、色が抜けた感じになる）
-                // 完全にモノクロにしたい場合は 'grayscale(100%)' なども可
-                ctx.filter = 'saturate(20%)'; 
-            }
-
-            ctx.fillStyle = this.color; // 元の色を使用する
+            ctx.fillStyle = this.cachedColor; 
             
             ctx.beginPath();
             
@@ -1335,14 +1411,15 @@
                 ctx.fill();
             }
 
-            // ★変更: 描画が終わったらフィルタ設定を元に戻す
-            ctx.restore();
+            // ★変更: restore削除
+            // ctx.restore();
             
             if (this.isBoss) {
                 this.drawBossUI();
             } else {
-                ctx.fillStyle = 'black';
-                ctx.fillRect(this.x - 2, this.y - 2, 4, 4);
+                // 処理落ち軽減のため、小さい黒点描画は削除（またはコメントアウト）
+                // ctx.fillStyle = 'black';
+                // ctx.fillRect(this.x - 2, this.y - 2, 4, 4);
             }
         }
 
@@ -1419,9 +1496,57 @@
         }
     }
 
-    // 汎用プロジェクタイルクラス
-    // 汎用プロジェクタイルクラス
-    // 汎用プロジェクタイルクラス
+    // --- 空間分割（軽量化）用クラス ---
+    class SpatialHash {
+        constructor(cellSize) {
+            this.cellSize = cellSize;
+            this.grid = new Map();
+        }
+
+        getKey(x, y) {
+            const cx = Math.floor(x / this.cellSize);
+            const cy = Math.floor(y / this.cellSize);
+            return `${cx},${cy}`;
+        }
+
+        add(obj) {
+            const key = this.getKey(obj.x, obj.y);
+            if (!this.grid.has(key)) {
+                this.grid.set(key, []);
+            }
+            this.grid.get(key).push(obj);
+        }
+
+        // 周囲9マスにあるオブジェクトを取得
+        getNearby(obj) {
+            const cx = Math.floor(obj.x / this.cellSize);
+            const cy = Math.floor(obj.y / this.cellSize);
+            let results = [];
+            
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dy = -1; dy <= 1; dy++) {
+                    const key = `${cx + dx},${cy + dy}`;
+                    const cell = this.grid.get(key);
+                    if (cell) {
+                        // 配列結合の高速化 (push apply等よりループが確実)
+                        for(let i=0; i<cell.length; i++) {
+                            results.push(cell[i]);
+                        }
+                    }
+                }
+            }
+            return results;
+        }
+        
+        clear() {
+            this.grid.clear();
+        }
+    }
+    
+    // グローバル変数としてインスタンス作成 (敵の最大サイズより少し大きく設定)
+    const enemyGrid = new SpatialHash(80);
+
+
     // 汎用プロジェクタイルクラス
     class Projectile {
         constructor(x, y, type, level, target) {
@@ -1562,7 +1687,7 @@
                 // 半径: 60->50, 増加率ダウン
                 // 持続: 180->120 (2秒)
                 this.maxRadius = 90 + level * 5; 
-                this.duration = 580 + level * 20; 
+                this.duration = 280 + level * 20; 
                 this.currentRadius = this.maxRadius;
             }
         }
@@ -1781,97 +1906,105 @@
     }
 
     function spawnEnemyBatch() {
-        // --- 雑魚敵の数計算 ---
+        // --- 1. 雑魚敵の数計算 ---
         let count = 5 + wave * 4;
         
-        // ★変更: Wave55以降、雑魚敵の増え方を加速させる
+        // Wave55以降のインフレ
         if (wave > 55) {
-            // 1Waveごとにさらに+2体追加 (合計+4体/Waveペース)
             count += (wave - 55) * 4;
         }
 
-        // 敵増加呪い適用
+        // 呪い（敵増加）適用
         const curseLevel = upgradeLevels.curse || 0;
         count = Math.floor(count * (1 + curseLevel * 0.1));
 
+        // HELL MODEなら敵の数 1.5倍
+        if (isHellMode) {
+            count = Math.floor(count * 1.5);
+        }
+
         const margin = 40;
         
-        // --- 雑魚敵のタイプ抽選リスト作成 ---
+        // --- 2. 敵タイプの抽選ロジック (画像の仕様に復元) ---
+        // 進行度に合わせて、配列にタイプを追加することで確率を調整する方式
         let availableTypes = ['normal','normal','normal'];
-        if (wave >= 5) availableTypes.push('fortress','normal'); 
-        if (wave >= 15) availableTypes.push('rusher','fortress','normal');
-        if (wave >= 25) availableTypes.push('shooter','shooter','normal','normal','fortress','rusher');
-        if (wave >= 35) availableTypes.push('summoner','summoner','summoner','normal','fortress','rusher','shooter','shooter');
-        if (wave >= 45) availableTypes.push('teleporter','teleporter','teleporter','fortress','rusher','shooter','summoner');
-        // ランダム選出用の全ボスリスト
-        const allBossTypes = ['fortress', 'rusher', 'shooter', 'summoner', 'teleporter'];
 
-        // --- ボス出現判定 ---
-        // ★変更: Wave55以降の特殊ロジックを追加
+        if (wave >= 5)  availableTypes.push('fortress', 'normal');
+        if (wave >= 15) availableTypes.push('rusher', 'fortress', 'normal');
+        if (wave >= 25) availableTypes.push('shooter', 'shooter', 'normal', 'normal', 'fortress', 'rusher');
+        if (wave >= 35) availableTypes.push('summoner', 'summoner', 'summoner', 'normal', 'fortress', 'rusher', 'shooter', 'shooter');
+        if (wave >= 45) availableTypes.push('teleporter', 'teleporter', 'teleporter', 'fortress', 'rusher', 'shooter', 'summoner');
         
-        let bossSpawnCount = 0;
+        // --- 3. ボス出現判定 ---
+        let isBossWave = false;
+        let bossCount = 0;
+        let bossType = 'normal';
 
         if (wave >= 55) {
-            // Wave55以降: 5Waveごとにボス出現
+            // Wave55以降は 5Waveごとにランダムボス & 数が増加
             if (wave % 5 === 0) {
+                isBossWave = true;
                 // 55:1体, 60:2体, 65:3体...
-                bossSpawnCount = 1 + (wave - 55) / 5;
+                bossCount = Math.floor((wave - 50) / 5);
+                
+                // ランダムなボスタイプ
+                const bossTypes = ['rusher', 'shooter', 'fortress', 'summoner', 'teleporter'];
+                bossType = bossTypes[Math.floor(Math.random() * bossTypes.length)];
             }
         } else {
-            // Wave54まで: 10Waveごとに1体 (既存ルール)
+            // Wave55未満は 10Waveごとに固定ボス
             if (wave % 10 === 0) {
-                bossSpawnCount = 1;
+                isBossWave = true;
+                bossCount = 1;
+                if(wave === 10) bossType = 'rusher';
+                else if(wave === 20) bossType = 'shooter';
+                else if(wave === 30) bossType = 'fortress';
+                else if(wave === 40) bossType = 'summoner';
+                else if(wave === 50) bossType = 'teleporter';
             }
         }
 
-        // ボス生成ループ
-        for(let k=0; k < bossSpawnCount; k++) {
-            let bossType = 'normal';
-
-            if (wave >= 55) {
-                // ランダムなボスを選択
-                bossType = allBossTypes[Math.floor(Math.random() * allBossTypes.length)];
-            } else {
-                // 既存の固定ボス
-                if (wave === 10) bossType = 'fortress';
-                else if (wave === 20) bossType = 'rusher';
-                else if (wave === 30) bossType = 'shooter';
-                else if (wave === 40) bossType = 'summoner';
-                else if (wave === 50) bossType = 'teleporter';
+        // ボスの生成実行
+        if (isBossWave) {
+            for(let k=0; k<bossCount; k++) {
+                // 複数体出る場合は少しずらして出現
+                const bx = GAME_WIDTH/2 + (k * 60) - ((bossCount-1)*30);
+                const by = -100 - (k * 40);
+                
+                const boss = new Enemy(bx, by, bossType, true);
+                
+                // Wave50ボス撃破フラグ用（50の時だけ）
+                if (wave === 50 && k === 0) boss.isFinalBoss = true; 
+                
+                enemies.push(boss);
             }
-
-            let ex = GAME_WIDTH / 2;
-            let ey = -margin * 2 - (k * 100); 
-            
-            if (bossSpawnCount > 1) {
-                ex += (Math.random() - 0.5) * 200;
-            }
-
-            // 敵を生成してリストに追加
-            const newBoss = new Enemy(ex, ey, bossType, true);
-            
-            // ★追加: Wave50のボスなら「ラスボス」フラグを立てる
-            if (wave === 50) {
-                newBoss.isFinalBoss = true;
-            }
-            
-            enemies.push(newBoss);
         }
-
-        // --- 雑魚敵生成 ---
+        
+        // --- 4. 雑魚敵生成 ---
         for(let i=0; i<count; i++) {
-            let ex, ey;
-            const side = Math.floor(Math.random() * 4);
-            if(side === 0) { ex = Math.random() * GAME_WIDTH; ey = -margin; } 
-            else if(side === 1) { ex = Math.random() * GAME_WIDTH; ey = GAME_HEIGHT + margin; } 
-            else if(side === 2) { ex = -margin; ey = Math.random() * GAME_HEIGHT; } 
-            else { ex = GAME_WIDTH + margin; ey = Math.random() * GAME_HEIGHT; } 
-            
+            // リストからランダムに抽選（リスト内の数が多いタイプほど出やすい）
             const type = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+            let ex, ey;
+            
+            // 画面外のランダムな位置（上下左右）を決定
+            const side = Math.floor(Math.random() * 4);
+            if(side === 0) { // Top
+                ex = Math.random() * GAME_WIDTH;
+                ey = -margin;
+            } else if(side === 1) { // Bottom
+                ex = Math.random() * GAME_WIDTH;
+                ey = GAME_HEIGHT + margin;
+            } else if(side === 2) { // Left
+                ex = -margin;
+                ey = Math.random() * GAME_HEIGHT;
+            } else { // Right
+                ex = GAME_WIDTH + margin;
+                ey = Math.random() * GAME_HEIGHT;
+            }
+            
             enemies.push(new Enemy(ex, ey, type, false));
         }
     }
-
     // ★追加: ダイス獲得処理
     function gainDice() {
         const container = document.getElementById('dice-container');
@@ -2101,11 +2234,16 @@
     function updateWave(dt) {
         waveTimer += dt;
 
-        // ★変更: WAVE短縮アップグレード適用
-        // Lvごとに1秒(1000ms)短縮
-        const timeLevel = upgradeLevels.time || 0;
-        const reductionMs = timeLevel * 1000;
-        const currentWaveInterval = Math.max(5000, WAVE_INTERVAL - reductionMs); // 最低5秒は確保
+        // ★修正: HELL MODEなら3秒固定、それ以外は通常計算
+        let currentWaveInterval;
+        
+        if (isHellMode) {
+            currentWaveInterval = 3000; // 3秒固定
+        } else {
+            const timeLevel = upgradeLevels.time || 0;
+            const reductionMs = timeLevel * 1000;
+            currentWaveInterval = Math.max(5000, WAVE_INTERVAL - reductionMs);
+        }
 
         const ratio = 1 - (waveTimer / currentWaveInterval);
         domWaveBar.style.width = Math.max(0, ratio * 100) + '%';
@@ -2136,24 +2274,45 @@
     }
 
     function resolveEnemyCollisions() {
-        for (let i = 0; i < enemies.length; i++) {
-            for (let j = i + 1; j < enemies.length; j++) {
-                const e1 = enemies[i];
-                const e2 = enemies[j];
+        // 1. グリッドをリセットして全敵を登録
+        enemyGrid.clear();
+        for (let e of enemies) {
+            enemyGrid.add(e);
+        }
+
+        // 2. 近くの敵同士だけ判定
+        for (let e1 of enemies) {
+            // 自分周辺のグリッドにいる敵だけ取得
+            const nearby = enemyGrid.getNearby(e1);
+            
+            for (let e2 of nearby) {
+                if (e1 === e2) continue; // 自分自身は無視
+
+                // 高速化のため Math.hypot を使わず、距離の2乗で比較
                 const dx = e1.x - e2.x;
                 const dy = e1.y - e2.y;
-                const dist = Math.hypot(dx, dy);
+                const distSq = dx * dx + dy * dy; 
                 
-                // ★修正: 当たり判定を (サイズ/2 + サイズ/2) に合わせる
-                // 今までは (e1.size + e2.size) だったので2倍の距離で反発していました
-                const minDist = (e1.size/2 + e2.size/2) * 0.9; 
-                
-                if (dist < minDist && dist > 0) {
-                    const overlap = minDist - dist;
+                // 判定半径 (e1.size/2 + e2.size/2) * 0.9
+                // 事前に半径の和を計算して、それを2乗して比較
+                const combinedRadius = (e1.size + e2.size) * 0.45; // (size/2 + size/2) * 0.9 => (size+size)/2 * 0.9 => size*0.45
+                const minDistSq = combinedRadius * combinedRadius;
+
+                // 距離の2乗 < 半径の2乗 なら衝突
+                // (0.001は重なりすぎてゼロ除算になるのを防ぐ)
+                if (distSq < minDistSq && distSq > 0.001) {
+                    // ここだけルート計算する（衝突時のみ）
+                    const dist = Math.sqrt(distSq); 
+                    const overlap = (combinedRadius / 0.45 * 0.9) - dist; // 元のminDistに戻して計算
+                    
                     const pushX = (dx / dist) * (overlap / 2);
                     const pushY = (dy / dist) * (overlap / 2);
+                    
                     e1.x += pushX * 0.5;
                     e1.y += pushY * 0.5;
+                    
+                    // e2側はループが進んだときにe1として処理されるので、
+                    // ここで動かす必要はないが、動きをスムーズにするために双方動かす
                     e2.x -= pushX * 0.5;
                     e2.y -= pushY * 0.5;
                 }
@@ -2386,20 +2545,34 @@
 
         areaEffects.forEach(a => a.draw());
         jewels.forEach(j => j.draw());
-        diceDrops.forEach(d => d.draw()); // ★追加: ダイスの描画
+        diceDrops.forEach(d => d.draw());
         enemies.forEach(e => e.draw());
         enemyProjectiles.forEach(ep => ep.draw());
         projectiles.forEach(m => m.draw());
         particles.forEach(p => p.draw());
 
         // Player
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = player.color;
+        // ★変更: 重い shadowBlur を廃止し、半透明の円で発光を表現
+        // ctx.shadowBlur = 10;
+        // ctx.shadowColor = player.color;
+        
+        // 代替: 発光表現（ぼんやりした背景円）
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = player.color;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.size + 8, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+
+        // 本体描画
         ctx.fillStyle = player.color;
         ctx.beginPath();
         ctx.arc(player.x, player.y, player.size, 0, Math.PI*2);
         ctx.fill();
-        ctx.shadowBlur = 0;
+        
+        // 枠線
+        // ctx.shadowBlur = 0; // 不要になったので削除
         ctx.strokeStyle = 'white';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -2432,6 +2605,7 @@
     // --- シーン管理 ---
 
     function showTitle() {
+        // ... (前半の初期化処理はそのまま) ...
         isGameRunning = false;
         isPaused = false;
         isGameOver = false;
@@ -2444,12 +2618,32 @@
         const cr = parseInt(localStorage.getItem('diceSurvivors_credits')) || 0;
         document.getElementById('ending-screen').style.display = 'none';
         document.getElementById('title-credits').innerText = cr;
+        
+        document.getElementById('title-high-score').innerText = highScore;
+
+        // ★修正: クリア済みならバッジ、HELLボタン、HELLスコアを表示
+        const isCleared = localStorage.getItem('diceSurvivors_cleared');
+        const badge = document.getElementById('clear-badge');
+        const btnHell = document.getElementById('btn-hell');
+        const hellScoreContainer = document.getElementById('hell-score-container');
+        const hellScoreText = document.getElementById('title-hell-high-score');
+
+        if (isCleared) {
+            badge.style.display = 'inline-block';
+            
+            // HELL要素を表示
+            btnHell.style.display = 'block';
+            hellScoreContainer.style.display = 'block';
+            hellScoreText.innerText = hellHighScore;
+        } else {
+            badge.style.display = 'none';
+            btnHell.style.display = 'none';
+            hellScoreContainer.style.display = 'none';
+        }
 
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-        // ★変更: オーディオが起動中('running')のときだけ再生する
-        // (まだ停止中なら、この後の unlockAudio でクリック時に再生される)
         if (audioCtx.state === 'running') {
             playBgm('bgm_title');
         }
@@ -2616,10 +2810,23 @@
         return baseDamage * multiplier;
     }
 
-    function startGame() {
-        playSound('click');
+    function startGame(mode = 'normal') {
+        // クリック音を鳴らす（ファイルがあれば）
+        if (soundBuffers['click']) {
+            playSound('click');
+        } else {
+            // クリック音がなくてもAudioContextは再開させる
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+        
+        isHellMode = (mode === 'hell'); // フラグ設定
+
         document.getElementById('title-screen').style.display = 'none';
-        playBgm('bgm_game');
+        
+        // ★修正: BGM再生を確実に行う
+        // (直前の処理で停止してしまっている可能性があるため)
+        playBgm('bgm_game'); 
+        
         resetGame();
         isGameRunning = true;
         isGameOver = false;
@@ -2637,43 +2844,36 @@
         player.hp = 0;
         isGameOver = true;
 
-        // --- 共通: スコアとクレジットの計算・保存 ---
-        if(score > highScore) {
-            highScore = score;
-            localStorage.setItem('diceSurvivors_highScore', highScore);
+        // ★修正: モードによってスコア保存先を変える
+        if (isHellMode) {
+            if (score > hellHighScore) {
+                hellHighScore = score;
+                localStorage.setItem('diceSurvivors_hellHighScore', hellHighScore);
+            }
+        } else {
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('diceSurvivors_highScore', highScore);
+            }
         }
+
         totalCredits += score;
         localStorage.setItem('diceSurvivors_credits', totalCredits);
 
-
-        // --- 分岐判定 ---
-        // Wave50のボスを倒した = Wave51以上に到達している
+        // ... (以下、エンディング判定や画面表示処理はそのまま) ...
+        
         if (hasDefeatedWave50Boss) {
-            // ★エンディングルート
-            playBgm('bgm_ending');
-            
-            // 値のセット
-            document.getElementById('ed-score').innerText = score;
-            document.getElementById('ed-high-score').innerText = highScore;
-            document.getElementById('ed-credits').innerText = score;
-            
-            // 画面表示
-            document.getElementById('ending-screen').style.display = 'flex';
-            
-            // 紙吹雪開始
-            startConfetti();
-
+            // ...
         } else {
-            // ★通常ゲームオーバールート
             playSound('gameover');
             playBgm('bgm_gameover');
 
-            // 値のセット
+            // ★修正: ゲームオーバー画面の表示スコア
             document.getElementById('go-score').innerText = score;
-            document.getElementById('go-high-score').innerText = highScore;
+            // モードに応じたハイスコアを表示
+            document.getElementById('go-high-score').innerText = isHellMode ? hellHighScore : highScore;
             document.getElementById('go-credits').innerText = score;
             
-            // 画面表示
             screenGameOver.style.display = 'flex';
         }
     }
