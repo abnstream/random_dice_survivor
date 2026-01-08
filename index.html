@@ -657,7 +657,7 @@
             this.vy = vy;
             this.size = 6;
             this.color = '#ff00ff';
-            this.life = 200; // 寿命
+            this.life = 600; // 寿命
         }
 
         update() {
@@ -867,16 +867,16 @@
             let color = '#ff4444';
 
             if (this.type === 'fortress') {
-                hpMult = 2.0; speedMult = 0.6; sizeBase = 20; color = '#7f8c8d';
+                hpMult = 3.0; speedMult = 0.6; sizeBase = 20; color = '#8d6e63';
             } else if (this.type === 'rusher') {
-                hpMult = 0.5; speedMult = 0.8; sizeBase = 10; color = '#e67e22';
+                hpMult = 0.4; speedMult = 0.8; sizeBase = 10; color = '#e67e22';
                 this.rushAngle = Math.random() * Math.PI * 2;
             } else if (this.type === 'shooter') {
-                hpMult = 0.9; speedMult = 0.8; sizeBase = 14; color = '#2980b9';
+                hpMult = 0.9; speedMult = 1.4; sizeBase = 14; color = '#2980b9';
             } else if (this.type === 'summoner') {
                 hpMult = 2.0; speedMult = 0.5; sizeBase = 18; color = '#16a085';
             } else if (this.type === 'teleporter') {
-                hpMult = 1.5; speedMult = 0.6; sizeBase = 16; color = '#8e44ad';
+                hpMult = 2.0; speedMult = 0.6; sizeBase = 16; color = '#8e44ad';
                 this.state = 0; 
             }
 
@@ -1059,7 +1059,18 @@
                 if (Math.floor(this.timer / 5) % 2 === 0) return;
             }
 
-            ctx.fillStyle = this.slowTimer > 0 ? '#999' : this.color;
+            // ★変更: 状態を保存（フィルタの影響をこの敵の描画だけに限定するため）
+            ctx.save(); 
+
+            // ★変更: 色を直接灰色にするのではなく、フィルタで彩度を落とす
+            if (this.slowTimer > 0) {
+                // 彩度を20%まで落とす（元の色のニュアンスを残しつつ、色が抜けた感じになる）
+                // 完全にモノクロにしたい場合は 'grayscale(100%)' なども可
+                ctx.filter = 'saturate(20%)'; 
+            }
+
+            ctx.fillStyle = this.color; // 元の色を使用する
+            
             ctx.beginPath();
             
             if (this.type === 'fortress') {
@@ -1073,6 +1084,9 @@
                 ctx.arc(this.x, this.y, this.size/2, 0, Math.PI * 2);
                 ctx.fill();
             }
+
+            // ★変更: 描画が終わったらフィルタ設定を元に戻す
+            ctx.restore();
             
             if (this.isBoss) {
                 this.drawBossUI();
@@ -1528,12 +1542,12 @@
         const margin = 40;
         
         // --- 雑魚敵のタイプ抽選リスト作成 ---
-        let availableTypes = ['normal'];
-        if (wave >= 5) availableTypes.push('fortress'); 
-        if (wave >= 15) availableTypes.push('rusher');
-        if (wave >= 25) availableTypes.push('shooter');
-        if (wave >= 35) availableTypes.push('summoner');
-        if (wave >= 45) availableTypes.push('teleporter');
+        let availableTypes = ['normal','normal','normal'];
+        if (wave >= 5) availableTypes.push('fortress','normal'); 
+        if (wave >= 15) availableTypes.push('rusher','fortress','normal');
+        if (wave >= 25) availableTypes.push('shooter','shooter','normal','normal','fortress','rusher');
+        if (wave >= 35) availableTypes.push('summoner','summoner','summoner','normal','fortress','rusher','shooter','shooter');
+        if (wave >= 45) availableTypes.push('teleporter','teleporter','teleporter','fortress','rusher','shooter','summoner');
         // ランダム選出用の全ボスリスト
         const allBossTypes = ['fortress', 'rusher', 'shooter', 'summoner', 'teleporter'];
 
