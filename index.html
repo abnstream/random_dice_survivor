@@ -2862,7 +2862,7 @@
         player.hp = 0;
         isGameOver = true;
 
-        // ★修正: モードによってスコア保存先を変える
+        // スコア保存ロジック
         if (isHellMode) {
             if (score > hellHighScore) {
                 hellHighScore = score;
@@ -2878,17 +2878,34 @@
         totalCredits += score;
         localStorage.setItem('diceSurvivors_credits', totalCredits);
 
-        // ... (以下、エンディング判定や画面表示処理はそのまま) ...
-        
+        // --- 画面表示分岐 ---
         if (hasDefeatedWave50Boss) {
-            // ...
+            // ★ここが空だったのが原因です。以下を記述してください。
+            
+            // 1. クリアフラグを保存
+            localStorage.setItem('diceSurvivors_cleared', 'true');
+
+            // 2. エンディングBGM再生
+            playBgm('bgm_ending');
+
+            // 3. エンディング画面の数値を更新
+            document.getElementById('ed-score').innerText = score;
+            // モードに応じたハイスコアを表示
+            document.getElementById('ed-high-score').innerText = isHellMode ? hellHighScore : highScore;
+            document.getElementById('ed-credits').innerText = score;
+
+            // 4. 画面を表示
+            document.getElementById('ending-screen').style.display = 'flex';
+            
+            // 5. 紙吹雪エフェクト開始
+            startConfetti();
+
         } else {
+            // 通常のゲームオーバー
             playSound('gameover');
             playBgm('bgm_gameover');
 
-            // ★修正: ゲームオーバー画面の表示スコア
             document.getElementById('go-score').innerText = score;
-            // モードに応じたハイスコアを表示
             document.getElementById('go-high-score').innerText = isHellMode ? hellHighScore : highScore;
             document.getElementById('go-credits').innerText = score;
             
