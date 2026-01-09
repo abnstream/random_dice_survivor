@@ -1289,10 +1289,28 @@
                     }
                     if (this.timer > 200) { this.state = 1; this.timer = 0; }
                 } else if (this.state === 1) {
+                    // ★ここを修正: 再出現位置を画面の「枠付近」に限定する
                     if (this.timer > 60) {
-                        this.x = Math.random() * (GAME_WIDTH - 100) + 50;
-                        this.y = Math.random() * (GAME_HEIGHT - 100) + 50;
+                        const padding = 60; // 画面端からの距離
+                        const edge = Math.floor(Math.random() * 4); // 0:上, 1:下, 2:左, 3:右
+
+                        if (edge === 0) { // Top
+                            this.x = Math.random() * (GAME_WIDTH - padding * 2) + padding;
+                            this.y = padding;
+                        } else if (edge === 1) { // Bottom
+                            this.x = Math.random() * (GAME_WIDTH - padding * 2) + padding;
+                            this.y = GAME_HEIGHT - padding;
+                        } else if (edge === 2) { // Left
+                            this.x = padding;
+                            this.y = Math.random() * (GAME_HEIGHT - padding * 2) + padding;
+                        } else { // Right
+                            this.x = GAME_WIDTH - padding;
+                            this.y = Math.random() * (GAME_HEIGHT - padding * 2) + padding;
+                        }
+
                         this.state = 2; this.timer = 0;
+                        
+                        // 弾の発射処理 (ここはそのまま)
                         for(let i=0; i<8; i++) {
                             const ang = (Math.PI * 2 / 8) * i;
                             const spd = 1.5;
@@ -1956,9 +1974,9 @@
             if (wave % 10 === 0) {
                 isBossWave = true;
                 bossCount = 1;
-                if(wave === 10) bossType = 'rusher';
-                else if(wave === 20) bossType = 'shooter';
-                else if(wave === 30) bossType = 'fortress';
+                if(wave === 10) bossType = 'fortress';
+                else if(wave === 20) bossType = 'rusher';
+                else if(wave === 30) bossType = 'shooter';
                 else if(wave === 40) bossType = 'summoner';
                 else if(wave === 50) bossType = 'teleporter';
             }
